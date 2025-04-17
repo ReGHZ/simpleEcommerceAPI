@@ -1,16 +1,15 @@
 const express = require('express');
 const authMiddleware = require('../middleware/Auth.middleware');
 const adminMiddleware = require('../middleware/Admin.middleware');
-const {
-  insertProduct,
-  getAllProducts,
-} = require('../controllers/Order.controllers');
 const upload = require('../helpers/Upload.helper');
+const {
+  getAllProducts,
+  insertProduct,
+} = require('../controllers/Product.controllers');
 
 const router = express.Router();
 
 // All routes related to Products
-router.get('/all', getAllProducts);
 router.post(
   '/insert',
   authMiddleware,
@@ -18,6 +17,7 @@ router.post(
   upload.array('images'),
   insertProduct
 );
+router.get('/all', getAllProducts);
 
 // Export the router
 module.exports = router;
