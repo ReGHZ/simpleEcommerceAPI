@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const connectToDB = require('./database/MongoDB');
-const { authRoutes } = require('./config/routes.conf');
+const { authRoutes, productRoutes } = require('./config/routes.conf');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -16,6 +16,7 @@ app.use(cors());
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/products', productRoutes);
 
 // Default Route
 app.get('/', (req, res) => {

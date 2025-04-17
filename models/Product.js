@@ -6,7 +6,10 @@ const productSchema = new mongoose.Schema({
   price: Number,
   category: String,
   stock: Number,
-  images: [String],
+  images: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Media',
+  },
   ratings: Number,
   createdAt: Date,
 });
