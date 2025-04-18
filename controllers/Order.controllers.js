@@ -30,7 +30,7 @@ const addToCart = async (req, res) => {
     if (!cart) {
       cart = new Cart({
         user: userId, // Set the user ID for the cart
-        item: [], // Initialize an empty array for items
+        items: [], // Initialize an empty array for items
         totalPrice: 0, // Initialize total price to 0
         createdAt: new Date(), // Set the creation date
       });
@@ -41,13 +41,13 @@ const addToCart = async (req, res) => {
     );
 
     if (existingItemIndex > -1) {
-      cart.item[existingItemIndex].quantity += quantity; // Update the quantity if the product exists
+      cart.items[existingItemIndex].quantity += quantity; // Update the quantity if the product exists
     } else {
-      cart.item.push({ product: productId, quantity }); // Add a new item to the cart if it doesn't exist
+      cart.items.push({ product: productId, quantity }); // Add a new item to the cart if it doesn't exist
     }
 
     let totalPrice = 0; // Initialize total price to 0
-    for (const item of cart.item) {
+    for (const item of cart.items) {
       const productInfo = await Product.findById(item.product); // Fetch product details for each item
       totalPrice += productInfo.price * item.quantity; // Calculate the total price
     }
@@ -88,7 +88,7 @@ const checkout = async (req, res) => {
     }
 
     // Validate stock
-    for (const item of cart.item) {
+    for (const item of cart.items) {
       // Loop through each item in the cart
       if (item.quantity > item.product.stock) {
         // Check if the quantity exceeds the stock
@@ -139,6 +139,7 @@ const checkout = async (req, res) => {
     return res.status(200).json({
       success: true, // Indicate success
       message: 'Order successfully created, proceed to payment', // Success message
+      data: newOrder, // Include the newly created order in the response
     });
   } catch (e) {
     await session.abortTransaction(); // Abort the transaction in case of an error
@@ -151,7 +152,30 @@ const checkout = async (req, res) => {
   }
 };
 
+const getOrderHistory = async (req, res) => {
+  try {
+    const userId = req.user._id; // Get the user ID from the request object
+
+    const orders = await Order.find({ user: userId }) // Find all orders associated with the user
+      .populate('items.product', 'name price') // Populate product details (name and price) in the order items
+      .sort({ createdAt: -1 }); // Sort the orders by creation date in descending order
+
+    return res.status(200).json({
+      success: true, // Indicate success
+      message: 'Order successfully retrieved', // Success message
+      data: orders, // Include the retrieved orders in the response
+    });
+  } catch (e) {
+    console.error('Error during checkout:', e); // Log the error
+    return res.status(500).json({
+      success: false, // Indicate failure
+      message: 'Something went wrong!', // Error message
+    });
+  }
+};
+
 module.exports = {
   addToCart,
   checkout,
+  getOrderHistory,
 };

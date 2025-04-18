@@ -2,13 +2,24 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const connectToDB = require('./database/MongoDB');
-const { authRoutes, productRoutes } = require('./config/routes.conf');
+const {
+  authRoutes,
+  productRoutes,
+  orderRoutes,
+  paymentRoutes,
+} = require('./config/routes.conf');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Connect to DB
 connectToDB();
+
+// Raw parser
+app.use(
+  '/api/payment/webhook',
+  express.raw({ type: 'application/json' }) // raw body just for webhook
+);
 
 // Middleware
 app.use(express.json());
@@ -17,6 +28,8 @@ app.use(cors());
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/payment', paymentRoutes);
 
 // Default Route
 app.get('/', (req, res) => {
