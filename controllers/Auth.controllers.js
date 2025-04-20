@@ -71,7 +71,6 @@ const register = async (req, res) => {
     res.status(200).json({
       success: true, // Indicate success
       message: 'User registered successfully', // Success message
-      data: newlyCreatedUser, // Return the created user
     });
   } catch (e) {
     await session.abortTransaction(); // Abort the transaction in case of error

@@ -10,7 +10,7 @@ const sendEmail = async ({ to, subject, html }) => {
   try {
     // Attempt to send an email using the transporter configuration
     const info = await transporter.sendMail({
-      from: `"Your App Name" <${process.env.EMAIL_USER}>`, // Set the sender's email address
+      from: `"E-commerce App" <${process.env.EMAIL_USER}>`, // Set the sender's email address
       to, // Set the recipient's email address
       subject, // Set the email subject
       html, // Set the email content in HTML format
