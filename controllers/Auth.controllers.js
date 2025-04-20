@@ -36,14 +36,18 @@ const register = async (req, res) => {
 
     // User verification
     const verificationToken = crypto.randomBytes(32).toString('hex'); // Generate a random verification token
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(verificationToken)
+      .digest('hex'); // Hash the token
 
     // Create new user and save in database
     const newlyCreatedUser = new User({
       username, // Set the username
       email, // Set the email
       password: hashedPassword, // Set the hashed password
-      role: role || 'user', // Set the role, default to 'user'
-      verificationToken, // Set the verification token
+      role: role, // Set the role
+      verificationToken: hashedToken, // Save the hashed token
       createdAt: new Date(), // Set the creation date
     });
 
@@ -72,11 +76,13 @@ const register = async (req, res) => {
   } catch (e) {
     await session.abortTransaction(); // Abort the transaction in case of error
     session.endSession(); // End the session
-    console.error('Error during user registration:', e); // Log the error
+    console.error('Error during user registration:', e.message); // Log the error message
     return res.status(500).json({
       success: false, // Indicate failure
       message: 'Something went wrong!', // Error message
     });
+  } finally {
+    session.endSession(); // Ensure session is always ended
   }
 };
 
@@ -85,8 +91,11 @@ const verifyEmail = async (req, res) => {
     // Extract the 'token' parameter from the request URL
     const { token } = req.params; // Get the token from the request parameters
 
-    // Attempt to find a user in the database whose 'verificationToken' matches the provided token
-    const user = await User.findOne({ verificationToken: token }); // Search for a user with the matching verification token
+    // Hash the token received from the URL
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex'); // Hash the token
+
+    // Attempt to find a user in the database whose 'verificationToken' matches the hashed token
+    const user = await User.findOne({ verificationToken: hashedToken }); // Search for a user with the matching hashed token
 
     // If no user is found, it means the token is invalid or expired
     if (!user) {
