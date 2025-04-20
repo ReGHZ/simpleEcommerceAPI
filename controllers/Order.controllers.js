@@ -7,27 +7,49 @@ const addToCart = async (req, res) => {
   try {
     const userId = req.user._id; // Get the user ID from the request object
 
-    const { productId, quantity } = req.body; // Destructure productId and quantity from the request body
+    const { productId, quantity: rawQuantity } = req.body; // Destructure productId and quantity from the request body
+    let quantity = rawQuantity; // Assign rawQuantity to quantity
 
-    if (!productId || !quantity) {
+    if (!productId || quantity === undefined || quantity === null) {
+      // Check if productId or quantity is missing
       return res
         .status(400) // Set HTTP status to 400 (Bad Request)
         .json({
-          success: false,
+          success: false, // Indicate failure
           message: 'ProductId and quantity must be filled', // Error message for missing fields
         }); // Return error if ProductId and quantity not filled
     }
 
+    quantity = Number(quantity); // Convert quantity to a number
+    if (isNaN(quantity) || quantity <= 0) {
+      // Check if quantity is not a positive number
+      return res.status(400).json({
+        success: false, // Indicate failure
+        message: 'Quantity must be a positive number', // Error message for invalid quantity
+      });
+    }
+
     const product = await Product.findById(productId); // Find the product by its ID
     if (!product) {
+      // Check if the product exists
       return res.status(404).json({
-        success: false,
+        success: false, // Indicate failure
         message: 'Product not found', // Error message if product does not exist
+      });
+    }
+
+    // Check product stock
+    if (product.stock < quantity) {
+      // Check if the stock is insufficient
+      return res.status(400).json({
+        success: false, // Indicate failure
+        message: 'Insufficient stock for this product', // Error message for insufficient stock
       });
     }
 
     let cart = await Cart.findOne({ user: userId }); // Find the cart associated with the user
     if (!cart) {
+      // Check if the cart does not exist
       cart = new Cart({
         user: userId, // Set the user ID for the cart
         items: [], // Initialize an empty array for items
@@ -41,6 +63,15 @@ const addToCart = async (req, res) => {
     );
 
     if (existingItemIndex > -1) {
+      // Check if the product already exists in the cart
+      if (cart.items[existingItemIndex].quantity + quantity > product.stock) {
+        // Check if the updated quantity exceeds the stock
+        return res.status(400).json({
+          success: false, // Indicate failure
+          message: 'Insufficient stock for this product', // Error message for insufficient stock
+        });
+      }
+
       cart.items[existingItemIndex].quantity += quantity; // Update the quantity if the product exists
     } else {
       cart.items.push({ product: productId, quantity }); // Add a new item to the cart if it doesn't exist
@@ -48,7 +79,15 @@ const addToCart = async (req, res) => {
 
     let totalPrice = 0; // Initialize total price to 0
     for (const item of cart.items) {
+      // Loop through each item in the cart
       const productInfo = await Product.findById(item.product); // Fetch product details for each item
+      if (!productInfo) {
+        // Check if the product no longer exists
+        return res.status(400).json({
+          success: false, // Indicate failure
+          message: 'One of the products in your cart no longer exists', // Error message for missing product
+        });
+      }
       totalPrice += productInfo.price * item.quantity; // Calculate the total price
     }
     cart.totalPrice = totalPrice; // Update the cart's total price
@@ -89,6 +128,16 @@ const checkout = async (req, res) => {
 
     // Validate stock
     for (const item of cart.items) {
+      if (!item.product) {
+        // Check if the product in the cart item no longer exists
+        await session.abortTransaction(); // Abort the transaction if the product is missing
+        session.endSession(); // End the session
+        return res.status(400).json({
+          // Return a 400 Bad Request response
+          success: false, // Indicate failure
+          message: 'One of the products in your cart no longer exists', // Error message for missing product
+        });
+      }
       // Loop through each item in the cart
       if (item.quantity > item.product.stock) {
         // Check if the quantity exceeds the stock
@@ -99,6 +148,22 @@ const checkout = async (req, res) => {
           message: `insufficient stock for product ${item.product.name}`, // Error message for insufficient stock
         });
       }
+    }
+
+    // Validate deliveryAddress
+    const deliveryAddress = req.body.deliveryAddress || {}; // Get the delivery address from the request body or use an empty object
+    if (
+      !deliveryAddress.street || // Check if the street field is missing
+      !deliveryAddress.city || // Check if the city field is missing
+      !deliveryAddress.state || // Check if the state field is missing
+      !deliveryAddress.zipCode // Check if the zipCode field is missing
+    ) {
+      await session.abortTransaction(); // Abort the transaction if the delivery address is incomplete
+      session.endSession(); // End the session
+      return res.status(400).json({
+        success: false, // Indicate failure
+        message: 'Delivery address is incomplete', // Error message for incomplete delivery address
+      });
     }
 
     // Make order
@@ -122,7 +187,7 @@ const checkout = async (req, res) => {
       totalAmount, // Set the total amount
       paymentStatus: 'pending', // Set the payment status to pending
       deliveryAddress: req.body.deliveryAddress || {}, // Set the delivery address from the request body
-      stripePaymenId: null, // Set the Stripe payment ID to null
+      stripePaymentId: null, // Set the Stripe payment ID to null
       createdAt: new Date(), // Set the creation date
     });
 
@@ -134,7 +199,6 @@ const checkout = async (req, res) => {
     await cart.save({ session }); // Save the updated cart using the session
 
     await session.commitTransaction(); // Commit the transaction
-    session.endSession(); // End the session
 
     return res.status(200).json({
       success: true, // Indicate success
@@ -149,6 +213,8 @@ const checkout = async (req, res) => {
       success: false, // Indicate failure
       message: 'Something went wrong!', // Error message
     });
+  } finally {
+    session.endSession(); // End session with finnaly
   }
 };
 

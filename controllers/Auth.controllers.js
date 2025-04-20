@@ -55,7 +55,6 @@ const register = async (req, res) => {
 
     // Commit transaction if both operation succeed
     await session.commitTransaction(); // Commit the transaction
-    session.endSession(); // End the session
 
     // Send email AFTER transaction is successful
     const baseUrl = process.env.BASE_URL; // Get the base URL from environment variables
@@ -81,7 +80,7 @@ const register = async (req, res) => {
       message: 'Something went wrong!', // Error message
     });
   } finally {
-    session.endSession(); // Ensure session is always ended
+    session.endSession(); // End session with finnaly
   }
 };
 

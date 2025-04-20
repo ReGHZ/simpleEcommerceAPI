@@ -42,19 +42,35 @@ const insertProduct = async (req, res) => {
     // Loop through each product in the products array
     for (let i = 0; i < products.length; i++) {
       const product = products[i]; // Get the current product
+      if (!product.name || !product.price) {
+        // Check if the product has required fields (name and price)
+        return res.status(400).json({
+          success: false, // Indicate failure
+          message: `Product at index ${i} is missing required fields (name or price)`, // Error message for missing fields
+        });
+      }
+
       let mediaDoc = null; // Initialize media document as null
 
       const file = files[i]; // Get the corresponding file for the product
       if (file) {
-        const uploadedImage = await uploadProductPicture(file.path); // Upload the image to Cloudinary
-        mediaDoc = new Media({
-          url: uploadedImage.url, // Set the uploaded image URL
-          publicId: uploadedImage.publicId, // Set the Cloudinary public ID
-          uploadedBy: req.user._id, // Set the user who uploaded the media
-        });
-        await mediaDoc.save({ session }); // Save the media document in the session
-
-        fs.unlinkSync(file.path); // Delete the local file after upload
+        // Check if a file exists for the current product
+        try {
+          const uploadedImage = await uploadProductPicture(file.path); // Upload the product picture to Cloudinary
+          mediaDoc = new Media({
+            url: uploadedImage.url, // Set the URL of the uploaded image
+            publicId: uploadedImage.publicId, // Set the public ID of the uploaded image
+            uploadedBy: req.user._id, // Set the ID of the user who uploaded the image
+          });
+          await mediaDoc.save({ session }); // Save the media document in the session
+        } catch (uploadError) {
+          // Handle errors during the upload process
+          if (fs.existsSync(file.path)) {
+            // Check if the file exists on the filesystem
+            fs.unlinkSync(file.path); // Delete the file to clean up
+          }
+          throw uploadError; // Rethrow the error to be handled by the outer catch block
+        }
       }
 
       const newProduct = new Product({
@@ -68,7 +84,6 @@ const insertProduct = async (req, res) => {
     }
 
     await session.commitTransaction(); // Commit the transaction
-    session.endSession(); // End the session
 
     return res.status(200).json({
       success: true, // Indicate success
@@ -83,12 +98,19 @@ const insertProduct = async (req, res) => {
       success: false, // Indicate failure
       message: 'Something went wrong!', // Error message
     });
+  } finally {
+    session.endSession(); // End session with finnaly
   }
 };
 
 const getAllProducts = async (req, res) => {
   try {
-    const products = await Product.find(); // Fetch all products from the database
+    const limit = parseInt(req.query.limit) || 10; // Parse the limit from query or default to 10
+    const page = parseInt(req.query.page) || 1; // Parse the page from query or default to 1
+
+    const products = await Product.find() // Fetch products from the database
+      .skip((page - 1) * limit) // Skip the products of previous pages
+      .limit(limit); // Limit the number of products to the specified limit
 
     if (products.length === 0) {
       // Check if no products are found
